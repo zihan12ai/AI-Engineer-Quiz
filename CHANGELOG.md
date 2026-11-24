@@ -15,6 +15,13 @@ semantic versioning.
 
 ### Added
 
+- Combine keyword, collection, media type, included tags, and excluded tags;
+  paginate with stable creation-time ordering and export all matches as CSV.
+- Add three-state tag filters, editable filter summaries, request race protection,
+  result pagination, CSV download feedback, and reproducible `seed-search` data.
+- Add API and frontend acceptance tests for filtering, pagination, exports,
+  edits, failures, and rapid condition changes.
+
 - Parse common XMP RDF fields into structured metadata, catalog fields, and
   full-text search.
 - OCR images at ingest through the Tesseract binary when it is installed, so

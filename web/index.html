@@ -31,7 +31,7 @@
       </div>
       <div class="search-box">
         <input id="search" placeholder="Search assets, tags, metadata...">
-        <select id="search-mode" title="Search mode">
+        <select id="search-mode" title="Search mode" hidden>
           <option value="keyword">Keyword</option>
           <option value="semantic">Semantic</option>
         </select>
@@ -57,11 +57,12 @@
 
         <div id="facets" class="facets">
           <div class="facet-group">
-            <h4>Media type</h4>
+            <h4>Media type · catalog totals</h4>
             <ul id="facet-media"></ul>
           </div>
           <div class="facet-group">
-            <h4>Top tags</h4>
+            <h4>Tags · catalog totals</h4>
+            <p class="filter-help">Click to cycle: Any → Include → Exclude.<br>All included tags are required; any excluded tag removes an asset.</p>
             <ul id="facet-tags"></ul>
           </div>
         </div>
@@ -72,17 +73,27 @@
           <div class="view-head">
             <h2 id="result-title">Library</h2>
             <div class="view-controls">
-              <span id="active-filter" class="chip hidden"></span>
-              <select id="sort">
-                <option value="newest">Newest</option>
-                <option value="oldest">Oldest</option>
-                <option value="name">Name</option>
-                <option value="largest">Largest</option>
+              <select id="collection-filter" aria-label="Filter by collection"><option value="">All collections</option></select>
+              <select id="sort" aria-label="Sort by creation time">
+                <option value="newest">Created: newest first</option>
+                <option value="oldest">Created: oldest first</option>
               </select>
+              <button id="btn-export" class="btn btn-primary">Export all matches · CSV</button>
             </div>
           </div>
+          <div class="filter-summary">
+            <div id="active-filters" class="active-filters" aria-label="Active filters"></div>
+            <button id="clear-filters" class="btn btn-ghost">Clear filters</button>
+          </div>
+          <p id="library-status" class="muted" role="status" aria-live="polite"></p>
+          <div id="library-error" class="error-panel hidden" role="alert"><span id="library-error-text"></span> <button id="retry-library" class="btn">Retry</button></div>
           <div id="grid" class="grid"></div>
-          <div id="empty" class="empty hidden">No assets yet. Click Upload to get started.</div>
+          <div id="empty" class="empty hidden">No matching assets. Try changing or clearing the filters.</div>
+          <div class="pagination" aria-label="Search result pages">
+            <button id="page-prev" class="btn" disabled>Previous</button>
+            <span id="page-info" aria-live="polite"></span>
+            <button id="page-next" class="btn" disabled>Next</button>
+          </div>
         </div>
 
         <div id="view-collections" class="view hidden">

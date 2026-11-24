@@ -30,13 +30,14 @@ output, add or update a test in `tests/test_core.py`.
 Run the frontend login regression tests with Node.js 22 or newer:
 
 ```bash
-node --test tests/login.test.cjs
+node --test tests/login.test.cjs tests/search.test.cjs
 ```
 
 These tests execute the web client with a simulated DOM and Fetch responses.
-They use real Fetch request validation to catch invalid GET requests with a
-body, and cover successful login and rejected credentials. No npm packages
-are required. CI runs both the Python suite and these frontend tests.
+They cover login, pagination, filter resets, response races, failures, and CSV
+downloads. Real Fetch request validation catches invalid GET requests with a
+body. No npm packages are required. CI runs the Python and frontend tests.
+See `SUBMISSION.md` for reproducible search demo data and manual acceptance steps.
 
 ## Where things live
 
