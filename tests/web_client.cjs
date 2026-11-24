@@ -7,13 +7,13 @@ const vm = require("node:vm");
 const source = readFileSync(path.join(__dirname, "../web/app.js"), "utf8");
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
-function createPage({ accepted = true, fetchResponse } = {}) {
+function createPage({ accepted = true, fetchResponse, queryAll = () => [] } = {}) {
   const elements = new Map(), storage = new Map(), requests = [], downloads = [], blobs = [];
   function element(selector) {
     if (!elements.has(selector)) {
       const classes = new Set(["#app", "#login", "#login-error", "#library-error"].includes(selector) ? ["hidden"] : []);
       elements.set(selector, {
-        value: "", textContent: "", innerHTML: "", disabled: false, listeners: new Map(),
+        value: "", textContent: "", innerHTML: "", disabled: false, scrollTop: 0, listeners: new Map(),
         classList: {
           add: name => classes.add(name), remove: name => classes.delete(name),
           contains: name => classes.has(name),
@@ -28,7 +28,7 @@ function createPage({ accepted = true, fetchResponse } = {}) {
   }
   const context = vm.createContext({
     document: {
-      querySelector: element, querySelectorAll: () => [],
+      querySelector: element, querySelectorAll: queryAll,
       body: { append() {}, classList: { add() {}, remove() {} } },
       createElement: () => ({ click() { downloads.push({ href: this.href, download: this.download }); }, remove() {} }),
     },

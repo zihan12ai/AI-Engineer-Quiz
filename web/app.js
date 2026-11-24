@@ -204,12 +204,14 @@ function renderFacets(facets) {
     `<li class="${state.media===m.value?'active':''}" data-media="${m.value}"><span>${m.value}</span><span class="count">${m.count}</span></li>`).join("");
   const tags = new Map((facets.tags || []).map(t => [t.value, t.count]));
   [...state.includeTags, ...state.excludeTags].forEach(tag => { if (!tags.has(tag)) tags.set(tag, 0); });
-  const selected = tag => state.includeTags.has(tag) || state.excludeTags.has(tag);
-  $("#facet-tags").innerHTML = [...tags].sort(([a], [b]) => Number(selected(b)) - Number(selected(a)) || a.localeCompare(b)).map(([tag, count]) => {
+  const tagList = $("#facet-tags");
+  const scrollTop = tagList.scrollTop;
+  tagList.innerHTML = [...tags].sort(([a], [b]) => a.localeCompare(b)).map(([tag, count]) => {
     const mode = state.includeTags.has(tag) ? "include" : state.excludeTags.has(tag) ? "exclude" : "neutral";
     const label = { include: "Include", exclude: "Exclude", neutral: "Any" }[mode];
     return `<li><button class="tag-filter ${mode}" data-tag="${esc(tag)}" aria-label="${esc(tag)}: ${label}. Click to change."><span>${esc(tag)}</span><span class="tag-state">${label}</span></button><span class="count">${count}</span></li>`;
   }).join("");
+  tagList.scrollTop = scrollTop;
   $$("#facet-media li").forEach(li => li.addEventListener("click", () => { state.media = state.media===li.dataset.media?null:li.dataset.media; conditionsChanged(); }));
   $$("#facet-tags button").forEach(button => button.addEventListener("click", () => {
     const tag = button.dataset.tag;

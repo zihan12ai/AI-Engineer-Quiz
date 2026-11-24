@@ -8,6 +8,9 @@ semantic versioning.
 
 ### Fixed
 
+- Keep sidebar tags in name order and preserve their scroll position when
+  changing filter states, so repeated clicks can cycle the same tag in place.
+
 - Send an explicit POST from the login form so valid credentials reach the
   authentication endpoint instead of triggering a Fetch error. Add frontend
   regression tests for the login request, successful login, and rejected

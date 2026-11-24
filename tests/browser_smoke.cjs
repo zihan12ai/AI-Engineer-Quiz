@@ -66,7 +66,12 @@ function parseCsv(text) {
     await evaluate(expression);
     await waitFor('document.querySelector("#library-status").textContent === "" && document.querySelector("#library-error").classList.contains("hidden")', "library response");
   }
-  async function tag(name) { await action(`Array.from(document.querySelectorAll("#facet-tags button")).find(b => b.dataset.tag === ${JSON.stringify(name)}).click()`); }
+  async function tag(name) {
+    const position = () => evaluate(`Array.from(document.querySelectorAll("#facet-tags button")).map(b => ({tag:b.dataset.tag,top:b.offsetTop}))`);
+    const before = await position();
+    await action(`Array.from(document.querySelectorAll("#facet-tags button")).find(b => b.dataset.tag === ${JSON.stringify(name)}).click()`);
+    assert.deepEqual(await position(), before, "Tag buttons must stay in place after selection");
+  }
   async function screenshot(filename) {
     const shot = await cdp("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
     fs.mkdirSync("docs/screenshots", { recursive: true });
@@ -130,6 +135,10 @@ function parseCsv(text) {
   await evaluate('document.querySelector("#toast").classList.add("hidden"); window.scrollTo(0, document.querySelector("#view-library").getBoundingClientRect().top + window.scrollY - 200)');
   await delay(200);
   assert.ok(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), "Mobile layout should not overflow horizontally");
+  await evaluate('document.querySelector("#facet-tags").scrollTop=100');
+  const tagScroll = await evaluate('document.querySelector("#facet-tags").scrollTop');
+  await tag("internal"); await tag("internal"); await tag("internal");
+  assert.equal(await evaluate('document.querySelector("#facet-tags").scrollTop'), tagScroll);
   await screenshot("search-mobile.png");
   console.log("PASS: 390px layout; screenshots saved in docs/screenshots. Download directory:", downloadDir);
   await cdp("Browser.close");
