@@ -181,3 +181,23 @@ def test_existing_edit_routes_refresh_fts_filters_and_csv(catalog):
     assert client.delete(url + "/tags/freshtag").status_code == 200
     assert client.get("/api/assets", params={"q": "freshtag"}).json()["total"] == 0
     assert csv_rows(client.get("/api/assets/export.csv", params=filters)) == []
+
+
+def test_search_demo_is_reproducible_and_has_two_filtered_pages(catalog):
+    from keepstack.seed_search import run_seed
+    client, _ = catalog
+    run_seed()
+    conn = db.get_conn()
+    cid = conn.execute("SELECT id FROM collections WHERE name='Search acceptance demo'").fetchone()["id"]
+    params = [("collection_id", cid), ("q", "harbor"), ("include_tag", "approved"),
+              ("include_tag", "campaign"), ("exclude_tag", "internal")]
+    first = client.get("/api/assets", params=params).json()
+    assert first["total"] == 25
+    assert len(first["items"]) == 24
+    second = client.get("/api/assets", params=params + [("offset", 24)]).json()
+    assert len(second["items"]) == 1
+    before = [r["uuid"] for r in csv_rows(client.get("/api/assets/export.csv", params=params))]
+    assert len(before) == 25
+    run_seed()
+    assert client.get("/api/assets", params={"collection_id": cid}).json()["total"] == 36
+    assert [r["uuid"] for r in csv_rows(client.get("/api/assets/export.csv", params=params))] == before

@@ -6,8 +6,8 @@ Three complementary modes over one catalog:
   * filter   - faceted structured filters (media type, tag, status, dates)
   * semantic - embedding cosine ranking ("natural language" / more-like-this)
 
-Facet counts are returned alongside results so the UI can render a live,
-drill-down sidebar.
+Facet counts cover the entire catalog for the selected status, independently
+of search conditions, and are labeled as catalog totals in the web client.
 """
 from __future__ import annotations
 
@@ -106,7 +106,8 @@ def export_assets(**filters) -> list[dict]:
     """All matching rows and exact tag names, without pagination."""
     sql, params, order = _filtered_query(**filters)
     conn = get_conn()
-    rows = [dict(r) for r in conn.execute(f"SELECT a.* {sql} ORDER BY {order}", params)]
+    rows = [dict(r) for r in conn.execute(
+        f"SELECT a.id,a.uuid,a.title,a.description,a.filename,a.media_type,a.created_at {sql} ORDER BY {order}", params)]
     tags: dict[int, list[str]] = {}
     for row in conn.execute(
         "SELECT at.asset_id, t.name FROM asset_tags at JOIN tags t ON t.id = at.tag_id "
