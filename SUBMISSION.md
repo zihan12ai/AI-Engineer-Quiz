@@ -1,9 +1,10 @@
 # 素材检索与 CSV 导出
 
 - Fork：https://github.com/zihan12ai/AI-Engineer-Quiz
-- 分支：`feature/asset-search-export`
-- 主需求：Issue #3；最终提交 SHA 可用 `git rev-parse HEAD` 获取，以功能 PR 的 head 为准。
-- 登录缺陷已通过 Issue #1 / PR #2 独立修复并合并，保留了原始提交历史。
+- 交付分支：`main`，包含主功能及后续标签位置修复；旧的 `feature/asset-search-export` 分支仅保留主功能开发记录。
+- 已验收的功能版本 SHA：`a7d68937e86b60fa0095054275de65cb871f7cf0`（PR #6 合并提交）。
+- 主需求：Issue #3 / PR #4；标签位置修复：Issue #5 / PR #6；登录修复：Issue #1 / PR #2。均已合并并保留原始提交历史。
+- 本次仅更新交付说明。最终提交时一并提供 `main` 的完整 SHA；在最新 `main` 检出后执行 `git rev-parse HEAD` 获取，文档提交的最终 SHA 另附于交付消息。
 
 ## 运行（Windows PowerShell）
 
@@ -88,3 +89,4 @@ node tests/browser_smoke.cjs
 - CSV 同步生成并在内存中组装，适合本题数据规模；超大目录需要后续评估流式或异步导出。
 - 全部标签均可选，统计不随筛选联动；未增加模型接入或在线部署。
 - 原有 FastAPI startup 弃用警告，以及范围外的分享链接、用户/集合创建等入口的请求方法问题，未在本次扩展。
+- README 要求的功能无已知未完成项；上述可选能力和范围外问题未扩展实现。
