@@ -132,3 +132,32 @@ test("CSV failure shows an error and enables retry", async () => {
   assert.equal(page.downloads.length, 0);
   assert.equal(page.element("#btn-export").disabled, false);
 });
+
+test("left tags keep their order and scroll position across repeated clicks and responses", async () => {
+  const tags = ["architecture", "campaign", "internal", "water"].map(value => ({ value, count: 3 }));
+  const button = { dataset: { tag: "internal" }, addEventListener(_event, callback) { this.click = callback; } };
+  const page = createPage({
+    queryAll: selector => selector === "#facet-tags button" ? [button] : [],
+    fetchResponse: request => new URL(request.url).pathname === "/api/assets"
+      ? Response.json({ items: [], total: 0, facets: { tags } }) : undefined,
+  });
+  await page.submit();
+  const list = page.element("#facet-tags");
+  const order = () => [...list.innerHTML.matchAll(/data-tag="([^"]+)"/g)].map(match => match[1]);
+  const originalOrder = order();
+  assert.deepEqual(originalOrder, tags.map(tag => tag.value));
+  list.scrollTop = 180;
+  await button.click(); await flush();
+  assert.deepEqual(order(), originalOrder);
+  assert.equal(list.scrollTop, 180);
+  assert.equal(page.evaluate('state.includeTags.has("internal")'), true);
+  await button.click(); await flush();
+  assert.deepEqual(order(), originalOrder);
+  assert.equal(list.scrollTop, 180);
+  assert.equal(page.evaluate('state.excludeTags.has("internal")'), true);
+  assert.equal(page.evaluate('state.includeTags.has("internal")'), false);
+  await button.click(); await flush();
+  assert.deepEqual(order(), originalOrder);
+  assert.equal(list.scrollTop, 180);
+  assert.equal(page.evaluate('state.excludeTags.has("internal")'), false);
+});
