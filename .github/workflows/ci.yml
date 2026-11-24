@@ -16,8 +16,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Run frontend login regression tests
-        run: node --test tests/login.test.cjs
+      - name: Run frontend regression tests
+        run: node --test tests/login.test.cjs tests/search.test.cjs
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:

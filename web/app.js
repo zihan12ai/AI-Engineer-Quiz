@@ -2,7 +2,8 @@
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const state = { token: localStorage.getItem("keepstack_token"), user: null,
-  q: "", mode: "keyword", media: null, tag: null, sort: "newest", collection: null };
+  q: "", media: null, includeTags: new Set(), excludeTags: new Set(),
+  sort: "newest", collection: null, offset: 0, limit: 24, total: 0 };
 
 // ---------- API helper ----------
 async function api(path, opts = {}) {
@@ -33,6 +34,7 @@ $("#login-form").addEventListener("submit", async (e) => {
 });
 $("#btn-logout").addEventListener("click", logout);
 function logout() { localStorage.removeItem("keepstack_token"); state.token = null; state.user = null;
+  clearTimeout(searchTimer); libraryAbort?.abort(); libraryRevision++;
   $("#app").classList.add("hidden"); $("#login").classList.remove("hidden"); }
 
 function enterApp() {
@@ -57,23 +59,127 @@ $$(".nav-item").forEach(btn => btn.addEventListener("click", () => {
 }));
 
 // ---------- library / search ----------
-let searchTimer;
-$("#search").addEventListener("input", (e) => { state.q = e.target.value; clearTimeout(searchTimer); searchTimer = setTimeout(loadLibrary, 250); });
-$("#search-mode").addEventListener("change", (e) => { state.mode = e.target.value; loadLibrary(); });
-$("#sort").addEventListener("change", (e) => { state.sort = e.target.value; loadLibrary(); });
-$("#active-filter").addEventListener("click", () => { state.media = null; state.tag = null; state.collection = null; loadLibrary(); });
+let searchTimer, libraryAbort, libraryRevision = 0, lastFacets = {};
+$("#search").addEventListener("input", (e) => { state.q = e.target.value; conditionsChanged(true); });
+$("#sort").addEventListener("change", (e) => { state.sort = e.target.value; conditionsChanged(); });
+$("#collection-filter").addEventListener("change", (e) => { state.collection = e.target.value || null; conditionsChanged(); });
+$("#clear-filters").addEventListener("click", () => {
+  state.q = ""; state.media = null; state.collection = null;
+  state.includeTags.clear(); state.excludeTags.clear();
+  $("#search").value = "";
+  conditionsChanged();
+});
+$("#retry-library").addEventListener("click", () => loadLibrary());
+$("#page-prev").addEventListener("click", () => {
+  if (state.offset > 0) { state.offset = Math.max(0, state.offset - state.limit); loadLibrary(); }
+});
+$("#page-next").addEventListener("click", () => {
+  if (state.offset + state.limit < state.total) { state.offset += state.limit; loadLibrary(); }
+});
+
+function queryParams(paginated = true) {
+  const p = new URLSearchParams({ q: state.q, sort: state.sort });
+  if (state.media) p.set("media_type", state.media);
+  if (state.collection) p.set("collection_id", state.collection);
+  [...state.includeTags].sort().forEach(tag => p.append("include_tag", tag));
+  [...state.excludeTags].sort().forEach(tag => p.append("exclude_tag", tag));
+  if (paginated) { p.set("limit", state.limit); p.set("offset", state.offset); }
+  return p;
+}
+
+function conditionsChanged(debounce = false) {
+  state.offset = 0;
+  clearTimeout(searchTimer);
+  libraryAbort?.abort();
+  libraryRevision++; // invalidate old responses immediately, including during debounce
+  renderFacets(lastFacets);
+  renderConditions();
+  showLoading();
+  if (debounce) searchTimer = setTimeout(() => loadLibrary(), 250);
+  else return loadLibrary();
+}
+
+function showLoading() {
+  $("#grid").innerHTML = "";
+  $("#empty").classList.add("hidden");
+  $("#library-error").classList.add("hidden");
+  $("#library-status").textContent = "Loading matches…";
+  $("#page-prev").disabled = true; $("#page-next").disabled = true;
+  $("#page-info").textContent = "";
+  $("#result-title").textContent = state.q.trim() ? "Search results" : "Library";
+}
 
 async function loadLibrary() {
-  const p = new URLSearchParams({ q: state.q, sort: state.sort, mode: state.mode, limit: "120" });
-  if (state.media) p.set("media_type", state.media);
-  if (state.tag) p.set("tag", state.tag);
-  if (state.collection) p.set("collection_id", state.collection);
-  const data = await api("/api/assets?" + p.toString());
-  renderFacets(data.facets);
-  renderGrid(data.items, data.total);
-  const filt = state.media || (state.tag ? "#" + state.tag : null) || (state.collection ? "collection" : null);
-  $("#active-filter").classList.toggle("hidden", !filt);
-  if (filt) $("#active-filter").textContent = filt;
+  clearTimeout(searchTimer);
+  libraryAbort?.abort();
+  libraryAbort = new AbortController();
+  const revision = ++libraryRevision;
+  showLoading();
+  try {
+    const data = await api("/api/assets?" + queryParams(), { signal: libraryAbort.signal });
+    if (revision !== libraryRevision) return;
+    // An edit may remove the last item on the last page.
+    if (state.offset > 0 && state.offset >= data.total) {
+      state.offset = Math.max(0, Math.floor((data.total - 1) / state.limit) * state.limit);
+      return loadLibrary();
+    }
+    state.total = data.total;
+    lastFacets = data.facets;
+    renderFacets(data.facets);
+    renderConditions();
+    renderGrid(data.items, data.total);
+    $("#library-status").textContent = "";
+    $("#page-info").textContent = data.total
+      ? `${state.offset + 1}–${Math.min(state.offset + state.limit, data.total)} of ${data.total} matches · Page ${state.offset / state.limit + 1}`
+      : "0 matches";
+    $("#page-prev").disabled = state.offset === 0;
+    $("#page-next").disabled = state.offset + state.limit >= data.total;
+  } catch (error) {
+    if (revision !== libraryRevision || error.name === "AbortError") return;
+    $("#library-status").textContent = "";
+    $("#library-error-text").textContent = "Could not load matches. Please retry.";
+    $("#library-error").classList.remove("hidden");
+  }
+}
+
+$("#btn-export").addEventListener("click", async () => {
+  const button = $("#btn-export");
+  button.disabled = true; button.textContent = "Preparing CSV…";
+  try {
+    const response = await api("/api/assets/export.csv?" + queryParams(false));
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url; link.download = "keepstack-assets.csv";
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast("CSV download started");
+  } catch (error) { toast("CSV download failed. Please retry.", "err"); }
+  finally { button.disabled = false; button.textContent = "Export all matches · CSV"; }
+});
+
+function renderConditions() {
+  const filters = [];
+  if (state.q.trim()) filters.push(["q", "", `Keyword: ${state.q}`]);
+  if (state.collection) {
+    const collection = (lastFacets.collections || []).find(c => String(c.id) === String(state.collection));
+    filters.push(["collection", "", `Collection: ${collection?.name || state.collection}`]);
+  }
+  if (state.media) filters.push(["media", "", `Type: ${state.media}`]);
+  state.includeTags.forEach(tag => filters.push(["include", tag, `Include: ${tag}`]));
+  state.excludeTags.forEach(tag => filters.push(["exclude", tag, `Exclude: ${tag}`]));
+  $("#active-filters").innerHTML = filters.length ? filters.map(([kind, tag, label]) =>
+    `<button class="chip ${kind}" data-kind="${kind}" data-tag="${esc(tag)}" title="Remove filter">${esc(label)}</button>`).join("")
+    : '<span class="muted">All active assets · no filters</span>';
+  $("#clear-filters").disabled = !filters.length;
+  $$("#active-filters button").forEach(button => button.addEventListener("click", () => {
+    const { kind, tag } = button.dataset;
+    if (kind === "q") { state.q = ""; $("#search").value = ""; }
+    if (kind === "collection") state.collection = null;
+    if (kind === "media") state.media = null;
+    if (kind === "include") state.includeTags.delete(tag);
+    if (kind === "exclude") state.excludeTags.delete(tag);
+    conditionsChanged();
+  }));
 }
 
 function renderGrid(items, total) {
@@ -91,12 +197,26 @@ function renderGrid(items, total) {
 }
 
 function renderFacets(facets) {
+  $("#collection-filter").innerHTML = '<option value="">All collections</option>' + (facets.collections || []).map(c =>
+    `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+  $("#collection-filter").value = state.collection || "";
   $("#facet-media").innerHTML = (facets.media_types || []).map(m =>
     `<li class="${state.media===m.value?'active':''}" data-media="${m.value}"><span>${m.value}</span><span class="count">${m.count}</span></li>`).join("");
-  $("#facet-tags").innerHTML = (facets.tags || []).slice(0, 18).map(t =>
-    `<li class="${state.tag===t.value?'active':''}" data-tag="${esc(t.value)}"><span>${esc(t.value)}</span><span class="count">${t.count}</span></li>`).join("");
-  $$("#facet-media li").forEach(li => li.addEventListener("click", () => { state.media = state.media===li.dataset.media?null:li.dataset.media; loadLibrary(); }));
-  $$("#facet-tags li").forEach(li => li.addEventListener("click", () => { state.tag = state.tag===li.dataset.tag?null:li.dataset.tag; loadLibrary(); }));
+  const tags = new Map((facets.tags || []).map(t => [t.value, t.count]));
+  [...state.includeTags, ...state.excludeTags].forEach(tag => { if (!tags.has(tag)) tags.set(tag, 0); });
+  const selected = tag => state.includeTags.has(tag) || state.excludeTags.has(tag);
+  $("#facet-tags").innerHTML = [...tags].sort(([a], [b]) => Number(selected(b)) - Number(selected(a)) || a.localeCompare(b)).map(([tag, count]) => {
+    const mode = state.includeTags.has(tag) ? "include" : state.excludeTags.has(tag) ? "exclude" : "neutral";
+    const label = { include: "Include", exclude: "Exclude", neutral: "Any" }[mode];
+    return `<li><button class="tag-filter ${mode}" data-tag="${esc(tag)}" aria-label="${esc(tag)}: ${label}. Click to change."><span>${esc(tag)}</span><span class="tag-state">${label}</span></button><span class="count">${count}</span></li>`;
+  }).join("");
+  $$("#facet-media li").forEach(li => li.addEventListener("click", () => { state.media = state.media===li.dataset.media?null:li.dataset.media; conditionsChanged(); }));
+  $$("#facet-tags button").forEach(button => button.addEventListener("click", () => {
+    const tag = button.dataset.tag;
+    if (state.includeTags.delete(tag)) state.excludeTags.add(tag);
+    else if (!state.excludeTags.delete(tag)) state.includeTags.add(tag);
+    conditionsChanged();
+  }));
 }
 
 // ---------- asset detail drawer ----------
@@ -172,13 +292,13 @@ async function openAsset(uuid) {
     });
     $("#tag-add")?.addEventListener("keydown", async (e) => {
       if (e.key === "Enter" && e.target.value.trim()) {
-        await api("/api/assets/"+uuid+"/tags", { json: { name: e.target.value.trim() } });
-        openAsset(uuid);
+        await api("/api/assets/"+uuid+"/tags", { method: "POST", json: { name: e.target.value.trim() } });
+        openAsset(uuid); loadLibrary();
       }
     });
     $$("#tag-row .rm").forEach(rm => rm.addEventListener("click", async () => {
       await api("/api/assets/"+uuid+"/tags/"+encodeURIComponent(rm.dataset.tag), { method: "DELETE" });
-      openAsset(uuid);
+      openAsset(uuid); loadLibrary();
     }));
     $("#d-share")?.addEventListener("click", async () => {
       const r = await api("/api/shares", { json: { target_type: "asset", target_id: a.id, permission: "download" } });
@@ -228,11 +348,11 @@ async function loadCollections() {
     `<div class="collection-card" data-id="${c.id}"><span class="n">${esc(c.name)}</span><span class="muted">${c.asset_count} assets</span><span class="muted">${esc(c.description||"")}</span></div>`).join("")
     || '<p class="muted">No collections yet.</p>';
   $$("#collection-list .collection-card").forEach(card => card.addEventListener("click", () => {
-    state.collection = card.dataset.id; state.media = null; state.tag = null;
+    state.collection = card.dataset.id;
     $$(".nav-item").forEach(b => b.classList.remove("active"));
     $('.nav-item[data-view="library"]').classList.add("active");
     $$(".view").forEach(v => v.classList.add("hidden")); $("#view-library").classList.remove("hidden");
-    loadLibrary();
+    conditionsChanged();
   }));
 }
 $("#btn-new-collection").addEventListener("click", async () => {
