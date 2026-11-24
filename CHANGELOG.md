@@ -6,6 +6,13 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- Send an explicit POST from the login form so valid credentials reach the
+  authentication endpoint instead of triggering a Fetch error. Add frontend
+  regression tests for the login request, successful login, and rejected
+  credentials, and run them in CI.
+
 ### Added
 
 - Parse common XMP RDF fields into structured metadata, catalog fields, and
